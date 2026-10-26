@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.quiz.mapper.QuestionMapper">
+  <sql id="columns">
+    q.*, c.name AS category_name, u.nickname AS owner_name,
+    (SELECT COUNT(*) FROM question f WHERE f.parent_id=q.id AND f.status=1) AS follow_up_count,
+    CASE WHEN EXISTS(SELECT 1 FROM question f WHERE f.parent_id=q.id AND f.status=1) THEN TRUE ELSE FALSE END AS has_follow_up
+  </sql>
+  <sql id="joins">FROM question q LEFT JOIN question_category c ON c.id=q.category_id LEFT JOIN sys_user u ON u.id=q.owner_id</sql>
+  <sql id="filter">
+    q.status=1
+    AND (q.resume_id IS NULL OR EXISTS(SELECT 1 FROM resume r WHERE r.id=q.resume_id AND r.status=1))
+    <if test="!admin">AND (q.is_public=1 OR q.owner_id=#{userId})</if>
+    <if test="ordinary">AND q.resume_id IS NULL</if>
+    <if test="resumeId != null">AND q.resume_id=#{resumeId}</if>
+    <if test="categoryId != null">AND q.category_id=#{categoryId}</if>
+    <if test="type != null">AND q.type=#{type}</if>
+    <if test="difficulty != null">AND q.difficulty=#{difficulty}</if>
+    <if test="keyword != null">AND q.title LIKE CONCAT('%',#{keyword},'%')</if>
+    <if test="mine">AND q.owner_id=#{userId}</if>
+    <if test="admin and ownerId != null">AND q.owner_id=#{ownerId}</if>
+    <if test="admin and isPublic != null">AND q.is_public=#{isPublic}</if>
+    <if test="rootId != null">AND (q.id=#{rootId} OR q.root_id=#{rootId})</if>
+    <if test="wrong">
+      AND EXISTS(SELECT 1 FROM answer_record ar WHERE ar.user_id=#{userId} AND ar.question_id=q.id AND ar.is_correct=0
+        AND ar.id=(SELECT MAX(latest.id) FROM answer_record latest WHERE latest.user_id=#{userId} AND latest.question_id=q.id))
+    </if>
+  </sql>
+  <select id="findById" resultType="com.quiz.entity.Question">
+    SELECT <include refid="columns"/> <include refid="joins"/> WHERE q.id=#{id} AND q.status=1
+  </select>
+  <select id="lockById" resultType="com.quiz.entity.Question">SELECT * FROM question WHERE id=#{id} AND status=1 FOR UPDATE</select>
+  <select id="list" resultType="com.quiz.entity.Question">
+    SELECT <include refid="columns"/> <include refid="joins"/> WHERE <include refid="filter"/>
+    <choose><when test="random">ORDER BY RAND()</when><otherwise>ORDER BY q.id ASC</otherwise></choose>
+    LIMIT #{offset}, #{limit}
+  </select>
+  <select id="count" resultType="long">SELECT COUNT(*) FROM question q WHERE <include refid="filter"/></select>
+  <select id="chain" resultType="com.quiz.entity.Question">
+    SELECT <include refid="columns"/> <include refid="joins"/> WHERE q.status=1 AND (q.id=#{rootId} OR q.root_id=#{rootId}) ORDER BY q.id
+  </select>
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO question(category_id,type,difficulty,title,content,options,answer,analysis,parent_id,root_id,resume_id,block_id,owner_id,is_public,status)
+    VALUES(#{categoryId},#{type},#{difficulty},#{title},#{content},#{options},#{answer},#{analysis},#{parentId},#{rootId},#{resumeId},#{blockId},#{ownerId},#{isPublic},1)
+  </insert>
+  <update id="update">
+    UPDATE question SET category_id=#{categoryId},type=#{type},difficulty=#{difficulty},title=#{title},content=#{content},options=#{options},answer=#{answer},analysis=#{analysis},block_id=#{blockId} WHERE id=#{id} AND status=1
+  </update>
+  <update id="softDelete">UPDATE question SET status=0 WHERE id IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach></update>
+  <update id="setChainPublic">UPDATE question SET is_public=#{isPublic} WHERE id=#{rootId} OR root_id=#{rootId}</update>
+</mapper>

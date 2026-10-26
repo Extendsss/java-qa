@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.quiz.mapper.CategoryMapper">
+  <select id="findById" resultType="com.quiz.entity.Category">SELECT * FROM question_category WHERE id=#{id} AND status=1</select>
+  <select id="findAll" resultType="com.quiz.entity.Category">SELECT * FROM question_category WHERE status=1 ORDER BY sort,id</select>
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">INSERT INTO question_category(name,sort,status) VALUES(#{name},#{sort},1)</insert>
+  <update id="update">UPDATE question_category SET name=#{name},sort=#{sort} WHERE id=#{id} AND status=1</update>
+  <update id="softDelete">UPDATE question_category SET status=0 WHERE id=#{id}</update>
+  <select id="countReferences" resultType="long">SELECT COUNT(*) FROM question WHERE category_id=#{id} AND status=1</select>
+</mapper>

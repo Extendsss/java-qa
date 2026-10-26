@@ -1,0 +1,11 @@
+.git
+.idea
+target
+.tools
+node_modules
+*.log
+.env*
+.maven-repository
+.mysql-test-data
+.test-runtime
+数据库配置.md

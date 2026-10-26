@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.quiz.mapper.CommentMapper">
+  <select id="findById" resultType="com.quiz.entity.Comment">SELECT * FROM comment WHERE id=#{id} AND status=1</select>
+  <select id="list" resultType="com.quiz.entity.Comment">
+    SELECT c.*,u.nickname FROM comment c JOIN sys_user u ON u.id=c.user_id
+    WHERE c.question_id=#{questionId} AND c.status=1 ORDER BY c.id DESC LIMIT #{offset},#{size}
+  </select>
+  <select id="count" resultType="long">SELECT COUNT(*) FROM comment WHERE question_id=#{questionId} AND status=1</select>
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">INSERT INTO comment(question_id,user_id,content,status) VALUES(#{questionId},#{userId},#{content},1)</insert>
+  <update id="softDelete">UPDATE comment SET status=0 WHERE id=#{id}</update>
+</mapper>

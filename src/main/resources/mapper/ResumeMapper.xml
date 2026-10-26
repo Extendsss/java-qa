@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.quiz.mapper.ResumeMapper">
+  <sql id="columns">
+    r.*,u.nickname AS owner_name,
+    (SELECT COUNT(*) FROM resume_block b WHERE b.resume_id=r.id AND b.status=1) AS block_count,
+    (SELECT COUNT(*) FROM question q WHERE q.resume_id=r.id AND q.status=1) AS question_count
+  </sql>
+  <sql id="filters">
+    r.status=1
+    <if test="!admin">AND (r.is_public=1 OR r.owner_id=#{userId})</if>
+    <if test="query.keyword != null and query.keyword != ''">AND r.title LIKE CONCAT('%',#{query.keyword},'%')</if>
+    <if test="query.ownerId != null">AND r.owner_id=#{query.ownerId}</if>
+    <if test="query.isPublic != null">AND r.is_public=#{query.isPublic}</if>
+  </sql>
+  <select id="findById" resultType="com.quiz.entity.Resume">
+    SELECT <include refid="columns"/> FROM resume r LEFT JOIN sys_user u ON u.id=r.owner_id WHERE r.id=#{id} AND r.status=1
+  </select>
+  <select id="lockById" resultType="com.quiz.entity.Resume">SELECT * FROM resume WHERE id=#{id} AND status=1 FOR UPDATE</select>
+  <select id="list" resultType="com.quiz.entity.Resume">
+    SELECT <include refid="columns"/> FROM resume r LEFT JOIN sys_user u ON u.id=r.owner_id
+    WHERE <include refid="filters"/> ORDER BY r.id DESC LIMIT #{query.offset},#{query.size}
+  </select>
+  <select id="count" resultType="long">SELECT COUNT(*) FROM resume r WHERE <include refid="filters"/></select>
+  <insert id="insert" useGeneratedKeys="true" keyProperty="id">INSERT INTO resume(title,owner_id,is_public,status) VALUES(#{title},#{ownerId},#{isPublic},1)</insert>
+  <update id="updateTitle">UPDATE resume SET title=#{title} WHERE id=#{id} AND status=1</update>
+  <update id="softDelete">UPDATE resume SET status=0 WHERE id=#{id}</update>
+  <update id="setPublic">UPDATE resume SET is_public=#{isPublic} WHERE id=#{id}</update>
+  <update id="setQuestionsPublic">UPDATE question SET is_public=#{isPublic} WHERE resume_id=#{id}</update>
+  <update id="deleteQuestions">UPDATE question SET status=0 WHERE resume_id=#{id}</update>
+  <update id="deleteBlocks">UPDATE resume_block SET status=0 WHERE resume_id=#{id}</update>
+  <select id="blocks" resultType="com.quiz.entity.ResumeBlock">
+    SELECT b.*,d.name AS block_name,d.field_schema,d.repeatable FROM resume_block b JOIN block_def d ON d.id=b.block_def_id
+    WHERE b.resume_id=#{resumeId} AND b.status=1 ORDER BY d.sort,b.sort,b.id
+  </select>
+  <select id="findBlock" resultType="com.quiz.entity.ResumeBlock">
+    SELECT b.*,d.name AS block_name,d.field_schema,d.repeatable FROM resume_block b JOIN block_def d ON d.id=b.block_def_id WHERE b.id=#{id} AND b.status=1
+  </select>
+  <select id="lockBlock" resultType="com.quiz.entity.ResumeBlock">SELECT * FROM resume_block WHERE id=#{id} AND status=1 FOR UPDATE</select>
+  <select id="countBlock" resultType="long">SELECT COUNT(*) FROM resume_block WHERE resume_id=#{resumeId} AND block_def_id=#{blockDefId} AND status=1</select>
+  <insert id="insertBlock" useGeneratedKeys="true" keyProperty="id">INSERT INTO resume_block(resume_id,block_def_id,sort,content,status) VALUES(#{resumeId},#{blockDefId},#{sort},#{content},1)</insert>
+  <update id="updateBlock">UPDATE resume_block SET sort=#{sort},content=#{content} WHERE id=#{id} AND status=1</update>
+  <update id="deleteBlock">UPDATE resume_block SET status=0 WHERE id=#{id}</update>
+  <update id="detachBlock">UPDATE question SET block_id=NULL WHERE block_id=#{id}</update>
+</mapper>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.quiz.mapper.BlockDefMapper">
+  <select id="list" resultType="com.quiz.entity.BlockDef">
+    SELECT * FROM block_def WHERE status=1 <if test="enabledOnly">AND enabled=1</if> ORDER BY sort,id
+  </select>
+  <select id="lockDefinitions" resultType="java.lang.Long">SELECT id FROM block_def ORDER BY id FOR UPDATE</select>
+  <select id="findById" resultType="com.quiz.entity.BlockDef">SELECT * FROM block_def WHERE id=#{id} AND status=1</select>
+  <select id="findByCode" resultType="com.quiz.entity.BlockDef">SELECT * FROM block_def WHERE code=#{code}</select>
+  <select id="countActive" resultType="long">SELECT COUNT(*) FROM block_def WHERE status=1</select>
+  <select id="countReferences" resultType="long">SELECT COUNT(*) FROM resume_block WHERE block_def_id=#{id} AND status=1</select>
+  <select id="countDuplicateSingle" resultType="long">
+    SELECT COUNT(*) FROM (SELECT resume_id FROM resume_block WHERE block_def_id=#{id} AND status=1 GROUP BY resume_id HAVING COUNT(*) &gt; 1) duplicate_groups
+  </select>
+  <insert id="insert" parameterType="com.quiz.entity.BlockDef" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO block_def(code,name,field_schema,repeatable,enabled,sort,built_in,status)
+    VALUES(#{code},#{name},#{fieldSchema},#{repeatable},#{enabled},#{sort},0,1)
+  </insert>
+  <update id="update">UPDATE block_def SET name=#{name},field_schema=#{fieldSchema},repeatable=#{repeatable},enabled=#{enabled},sort=#{sort} WHERE id=#{id} AND status=1</update>
+  <update id="softDelete">UPDATE block_def SET status=0,enabled=0 WHERE id=#{id}</update>
+</mapper>

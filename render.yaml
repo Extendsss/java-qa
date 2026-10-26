@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: quiz-system
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/ping
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
