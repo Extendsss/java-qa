@@ -9,11 +9,102 @@
     template: `<div class="pager"><span>共 {{total}} 条</span><div class="pager-controls"><button :disabled="page<=1" @click="go(page-1)">上一页</button><input aria-label="页码" type="number" :value="page" min="1" :max="pages" @change="go($event.target.value)"><span>/ {{pages}}</span><button :disabled="page>=pages" @click="go(page+1)">下一页</button></div></div>`
   };
   Q.components.EmptyState = {props: {title: {default: '这里还没有内容'}, text: {default: '试试调整筛选条件，或添加第一条内容。'}}, template: `<div class="empty"><div class="empty-symbol">◇</div><h3>{{title}}</h3><p>{{text}}</p><slot></slot></div>`};
+  Q.monthValue = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(0, 7) : value;
+  Q.listEditor = {
+    prefix: /^\d+\.(?:[ \t]|$)/,
+    lines(text) {return text ? text.replace(/\r\n?/g, '\n').split('\n').map(line => line.replace(this.prefix, '')) : [];},
+    items(text) {return this.lines(text).filter(line => line.trim());},
+    format(lines) {return lines.map((line, index) => `${index + 1}. ${line}`).join('\n');},
+    normalize(text, position) {
+      const lines = text.replace(/\r\n?/g, '\n').split('\n');
+      const formatted = this.format(this.lines(text));
+      if (!text) return {text: '', position: 0};
+      const before = text.slice(0, position);
+      const index = before.split('\n').length - 1;
+      const offset = position - before.lastIndexOf('\n') - 1;
+      const prefixLength = (lines[index].match(this.prefix) || [''])[0].length;
+      const formattedLines = formatted.split('\n');
+      const lineStart = formattedLines.slice(0, index).reduce((length, line) => length + line.length + 1, 0);
+      return {text: formatted, position: lineStart + Math.min(formattedLines[index].length, `${index + 1}. `.length + Math.max(0, offset - prefixLength))};
+    }
+  };
+  Q.components.NumberedList = {
+    props: {modelValue: {default: () => []}, required: {default: false}, label: {default: '分条内容'}}, emits: ['update:modelValue'],
+    data() {return {draft: Q.listEditor.format(this.modelValue), composing: false, touched: false};},
+    computed: {
+      items() {return Q.listEditor.items(this.draft);},
+      validationError() {
+        if (this.required && !this.items.length) return `${this.label}至少填写 1 条内容`;
+        if (this.items.length > 30) return `${this.label}最多 30 条，当前 ${this.items.length} 条`;
+        const lines = Q.listEditor.lines(this.draft);
+        const index = lines.findIndex(item => item.length > 200);
+        return index < 0 ? '' : `${this.label}第 ${index + 1} 条最多 200 字，当前 ${lines[index].length} 字`;
+      }
+    },
+    watch: {
+      modelValue: {deep: true, handler(value) {if (JSON.stringify(value) !== JSON.stringify(this.items)) this.draft = Q.listEditor.format(value);}},
+      validationError() {this.$nextTick(() => this.validate());}
+    },
+    mounted() {this.validate();},
+    methods: {
+      validate() {this.$refs.input.setCustomValidity(this.validationError);},
+      input(event) {
+        if (this.composing || event.isComposing) return;
+        const input = event.target;
+        const start = Q.listEditor.normalize(input.value, input.selectionStart);
+        const end = Q.listEditor.normalize(input.value, input.selectionEnd);
+        this.draft = start.text;
+        if (input.value !== this.draft) {
+          input.value = this.draft;
+          input.setSelectionRange(start.position, end.position);
+        }
+        this.touched = true;
+        this.validate();
+        this.$emit('update:modelValue', this.items);
+      },
+      keydown(event) {
+        if (this.composing || event.isComposing || !['Backspace', 'Delete'].includes(event.key)) return;
+        const input = event.target;
+        const position = input.selectionStart;
+        if (position !== input.selectionEnd) return;
+        const lineStart = input.value.slice(0, position).lastIndexOf('\n') + 1;
+        const lineEnd = input.value.indexOf('\n', position);
+        const line = input.value.slice(lineStart, lineEnd < 0 ? input.value.length : lineEnd);
+        const prefixLength = (line.match(Q.listEditor.prefix) || [''])[0].length;
+        if (event.key === 'Backspace' && position <= lineStart + prefixLength) {
+          event.preventDefault();
+          if (!lineStart) {
+            if (line.length !== prefixLength) return;
+            input.setRangeText('', 0, lineEnd < 0 ? prefixLength : lineEnd + 1, 'end');
+          } else input.setRangeText('', lineStart - 1, lineStart + prefixLength, 'end');
+        } else if (event.key === 'Delete' && position === lineEnd) {
+          event.preventDefault();
+          const nextLine = input.value.slice(lineEnd + 1).split('\n')[0];
+          const nextPrefixLength = (nextLine.match(Q.listEditor.prefix) || [''])[0].length;
+          input.setRangeText('', lineEnd, lineEnd + 1 + nextPrefixLength, 'end');
+        } else return;
+        this.input({target: input});
+      },
+      compositionEnd(event) {this.composing = false; this.input(event);}
+    },
+    template: `<div class="numbered-list"><textarea ref="input" :value="draft" :required="required" :aria-label="label" :aria-invalid="touched&&!!validationError" @input="input" @keydown="keydown" @compositionstart="composing=true" @compositionend="compositionEnd" @invalid="touched=true" placeholder="1. 填写第一条内容，回车自动添加下一条&#10;2. 每条最多 200 字，最多 30 条"></textarea><div class="hint-line">已填写 {{items.length}} / 30 条 · 每条最多 200 字 · 回车自动编号</div><div v-if="touched&&validationError" class="field-error" role="alert">{{validationError}}</div></div>`
+  };
   Q.components.BlockFields = {
     props: {schema: {default: () => []}, modelValue: {default: () => ({})}}, emits: ['update:modelValue'],
+    data: () => ({previousDates: Object.create(null)}),
     computed: {fields() {return Q.json(this.schema, []);}},
-    methods: {set(field, value) {this.$emit('update:modelValue', {...this.modelValue, [field.key]: field.type === 'list' ? (value ? value.split('\n') : []) : value});}, value(field) {const v = this.modelValue[field.key]; return field.type === 'list' ? (Array.isArray(v) ? v.join('\n') : '') : v || ''; }},
-    template: `<div><div v-for="f in fields" :key="f.key" class="field"><label>{{f.label}} <span v-if="f.required" style="color:var(--red)">*</span><textarea v-if="f.type==='list'||f.type==='textarea'" :value="value(f)" @input="set(f,$event.target.value)" :required="f.required" :maxlength="f.type==='list'?6030:2000" :placeholder="f.type==='list'?'每行填写一条，最多 30 条':''"></textarea><input v-else :value="value(f)" @input="set(f,$event.target.value)" :required="f.required" :maxlength="200" :placeholder="f.type==='date'?'YYYY-MM 或 YYYY-MM-DD':''"></label><div v-if="f.type==='list'" class="hint-line">每条不超过 200 字，换行添加条目。</div></div></div>`
+    methods: {
+      set(field, value) {this.$emit('update:modelValue', {...this.modelValue, [field.key]: value});},
+      value(field) {const v = this.modelValue[field.key]; return field.type === 'list' ? (Array.isArray(v) ? v : []) : (field.type === 'date' ? Q.monthValue(v) : v) || '';},
+      supportsPresent(field) {return field.type === 'date' && (field.key === '结束时间' || field.label === '结束时间');},
+      setPresent(field, checked) {
+        if (checked) {
+          this.previousDates[field.key] = this.modelValue[field.key] || '';
+          this.set(field, '至今');
+        } else this.set(field, this.previousDates[field.key] || '');
+      }
+    },
+    template: `<div><div v-for="f in fields" :key="f.key" class="field"><div :class="{'date-field':f.type==='date'}"><label>{{f.label}} <span v-if="f.required" style="color:var(--red)">*</span><numbered-list v-if="f.type==='list'" :model-value="value(f)" @update:model-value="set(f,$event)" :required="f.required" :label="f.label"/><textarea v-else-if="f.type==='textarea'" :value="value(f)" @input="set(f,$event.target.value)" :required="f.required" maxlength="2000"></textarea><input v-else-if="f.type==='date'" type="month" :value="value(f)==='至今'?'':value(f)" :disabled="supportsPresent(f)&&value(f)==='至今'" @input="set(f,$event.target.value)" @click="$event.target.showPicker?.()" :required="f.required" max="9999-12"><input v-else :value="value(f)" @input="set(f,$event.target.value)" :required="f.required" maxlength="200"></label><label v-if="supportsPresent(f)" class="date-present"><input type="checkbox" :checked="value(f)==='至今'" @change="setPresent(f,$event.target.checked)">至今</label></div><div v-if="f.type==='textarea'" class="hint-line">整段最多 2000 字，支持自由换行。</div></div></div>`
   };
   Q.emptyContent = schema => Object.fromEntries(Q.json(schema, []).map(f => [f.key, f.type === 'list' ? [] : '']));
   Q.components.QuestionForm = {
@@ -30,7 +121,8 @@
   Q.components.ResumePreview = {
     props: {blocks: {default: () => []}, modelValue: {default: 0}, editable: {default: false}}, emits: ['update:modelValue','edit','add','remove'],
     computed: {current() {return this.blocks[this.modelValue] || null;}, content() {return this.current ? Q.json(this.current.content,{}) : {};}, fields() {if(!this.current)return[];const schema=Q.json(this.current.fieldSchema,[]);return [...schema.filter(f=>Object.prototype.hasOwnProperty.call(this.content,f.key)),...Object.keys(this.content).filter(key=>!schema.some(f=>f.key===key)).map(key=>({key,label:key}))];}},
-    template: `<aside class="preview"><div class="preview-header"><span class="small muted">简历内容预览</span><button v-if="editable" class="link" @click="$emit('add')">＋ 添加条目</button></div><div v-if="current" class="preview-page"><div class="section-head"><h2>{{current.blockName}}</h2><div v-if="editable" class="actions"><button class="link" @click="$emit('edit',current)">编辑</button><button class="link" @click="$emit('remove',current)">删除</button></div></div><dl v-for="f in fields" :key="f.key" class="preview-field"><dt>{{f.label}}</dt><dd v-if="Array.isArray(content[f.key])"><ul><li v-for="(item,i) in content[f.key]" :key="i">{{item}}</li></ul><span v-if="!content[f.key].length" class="muted">未填写</span></dd><dd v-else>{{content[f.key]||'未填写'}}</dd></dl></div><empty-state v-else title="还没有简历内容" text="先添加分块条目，再围绕经历构建问题链。"/><div v-if="blocks.length" class="preview-footer"><button :disabled="modelValue===0" @click="$emit('update:modelValue',modelValue-1)">上一页</button><select :value="modelValue" @change="$emit('update:modelValue',Number($event.target.value))" aria-label="跳转简历条目"><option v-for="(b,i) in blocks" :value="i">{{i+1}} / {{blocks.length}} · {{b.blockName}}</option></select><button :disabled="modelValue>=blocks.length-1" @click="$emit('update:modelValue',modelValue+1)">下一页</button></div></aside>`
+    methods: {value(field) {const v = this.content[field.key]; return field.type === 'date' ? Q.monthValue(v) : v;}},
+    template: `<aside class="preview"><div class="preview-header"><span class="small muted">简历内容预览</span><button v-if="editable" class="link" @click="$emit('add')">＋ 添加条目</button></div><div v-if="current" class="preview-page"><div class="section-head"><h2>{{current.blockName}}</h2><div v-if="editable" class="actions"><button class="link" @click="$emit('edit',current)">编辑</button><button class="link" @click="$emit('remove',current)">删除</button></div></div><dl v-for="f in fields" :key="f.key" class="preview-field"><dt>{{f.label}}</dt><dd v-if="Array.isArray(content[f.key])"><ol><li v-for="(item,i) in content[f.key]" :key="i">{{item}}</li></ol><span v-if="!content[f.key].length" class="muted">未填写</span></dd><dd v-else>{{value(f)||'未填写'}}</dd></dl></div><empty-state v-else title="还没有简历内容" text="先添加分块条目，再围绕经历构建问题链。"/><div v-if="blocks.length" class="preview-footer"><button :disabled="modelValue===0" @click="$emit('update:modelValue',modelValue-1)">上一页</button><select :value="modelValue" @change="$emit('update:modelValue',Number($event.target.value))" aria-label="跳转简历条目"><option v-for="(b,i) in blocks" :value="i">{{i+1}} / {{blocks.length}} · {{b.blockName}}</option></select><button :disabled="modelValue>=blocks.length-1" @click="$emit('update:modelValue',modelValue+1)">下一页</button></div></aside>`
   };
   Q.components.PracticePanel = {
     mixins:[Q.mix], props:{resumeId:{default:null},settings:{default:null},questionId:{default:null}}, emits:['question','finished'],

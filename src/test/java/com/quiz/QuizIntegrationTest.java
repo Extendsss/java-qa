@@ -151,6 +151,72 @@ class QuizIntegrationTest {
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM resume_block WHERE resume_id=? AND status=1",Long.class,resume));
         call(get("/api/questions/"+child),admin,null,404);
     }
+    @Test void resumeCreationAcceptsThirtyFullLengthItemsAndRollsBackInvalidLists() throws Exception {
+        JsonNode defs=call(get("/api/block-defs"),alice,null,0).path("data");
+        JsonNode definition=null;
+        for(JsonNode d:defs) {
+            if("work".equals(d.path("code").asText())) { definition=d;break; }
+            if("project".equals(d.path("code").asText())) definition=d;
+        }
+        Assumptions.assumeTrue(definition!=null,"长文本简历集成测试需要已启用的工作或项目经历分块");
+        JsonNode schema=definition.path("fieldSchema");
+        if(schema.isTextual()) schema=json.readTree(schema.asText());
+        String listKey=null,startKey=null,endKey=null;
+        for(JsonNode field:schema) {
+            String key=field.path("key").asText(),label=field.path("label").asText();
+            if("list".equals(field.path("type").asText()) && listKey==null) listKey=key;
+            if("date".equals(field.path("type").asText())) {
+                if("开始时间".equals(key) || "开始时间".equals(label)) startKey=key;
+                if("结束时间".equals(key) || "结束时间".equals(label)) endKey=key;
+            }
+        }
+        Assumptions.assumeTrue(listKey!=null && startKey!=null && endKey!=null,
+                "经历分块需要包含分条列表、开始时间和结束时间字段");
+        char[] characters=new char[200];Arrays.fill(characters,'文');
+        String item=new String(characters);
+        Map<String,Object> content=blockContent(definition);
+        content.put(listKey,Collections.nCopies(30,item));
+        content.put(startKey,"2026-10");content.put(endKey,"至今");
+        long def=definition.path("id").asLong();
+        long resume=call(post("/api/resumes"),alice,map("title",runMarker+" 工作经历长文本",
+                "blocks",Collections.singletonList(map("blockDefId",def,"content",content))),0)
+                .path("data").path("id").asLong();
+        assertTrue(resume>0,"含一个完整分块的简历应创建成功并返回ID");createdResumes.add(resume);
+        assertEquals(resume,call(get("/api/resumes/"+resume),alice,null,0).path("data").path("id").asLong());
+        JsonNode blocks=call(get("/api/resumes/"+resume+"/blocks"),alice,null,0).path("data");
+        assertEquals(1,blocks.size());
+        JsonNode stored=blocks.get(0).path("content");
+        if(stored.isTextual()) stored=json.readTree(stored.asText());
+        assertEquals("2026-10",stored.path(startKey).asText());
+        assertEquals("至今",stored.path(endKey).asText());
+        assertEquals(30,stored.path(listKey).size());
+        int totalLength=0;
+        for(JsonNode line:stored.path(listKey)) {
+            assertEquals(item,line.asText());totalLength+=line.asText().length();
+        }
+        assertEquals(6000,totalLength,"列表限制应按单条计算，30条共6000字应完整保存");
+        call(get("/api/resumes/"+resume+"/questions"),alice,null,0);
+
+        long before=jdbc.queryForObject("SELECT COUNT(*) FROM resume WHERE owner_id=?",Long.class,aliceId);
+        List<List<String>> invalidLists=Arrays.asList(Collections.singletonList(item+"文"),Collections.nCopies(31,item));
+        for(int i=0;i<invalidLists.size();i++) {
+            String invalidTitle=runMarker+" rejected-list-"+i;
+            Map<String,Object> invalidContent=new LinkedHashMap<>(content);
+            invalidContent.put(listKey,invalidLists.get(i));
+            try {
+                call(post("/api/resumes"),alice,map("title",invalidTitle,
+                        "blocks",Collections.singletonList(map("blockDefId",def,"content",invalidContent))),400);
+            } finally {
+                // Register any incorrectly committed rows before the rollback assertion,
+                // so a regression still cleans up only this test's own data.
+                createdResumes.addAll(jdbc.queryForList("SELECT id FROM resume WHERE owner_id=? AND title=?",
+                        Long.class,aliceId,invalidTitle));
+            }
+            assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM resume WHERE owner_id=? AND title=?",
+                    Long.class,aliceId,invalidTitle),"非法列表创建失败后不应留下简历行");
+            assertEquals(before,jdbc.queryForObject("SELECT COUNT(*) FROM resume WHERE owner_id=?",Long.class,aliceId));
+        }
+    }
     @Test void disabledUsersLoseSessionAndPasswordsNeverSerialize() throws Exception {
         JsonNode me=call(get("/api/auth/me"),alice,null,0).path("data");assertFalse(me.has("password"));
         call(put("/api/admin/users/"+aliceId),admin,map("nickname","Alice","role","USER","status",0),0);

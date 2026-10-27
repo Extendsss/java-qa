@@ -126,18 +126,22 @@ public class BlockDefService {
                 Checks.require(!required || !text.trim().isEmpty(), label + "不能为空");
                 int max = "textarea".equals(type) ? 2000 : 200;
                 Checks.require(text.length() <= max, label + "最多 " + max + " 字");
-                if ("date".equals(type) && !text.isEmpty()) validateDate(text, label);
+                if ("date".equals(type) && !text.isEmpty())
+                    validateDate(text, label, "结束时间".equals(key) || "结束时间".equals(label));
             }
         }
         return serialize(content);
     }
 
-    private void validateDate(String text, String label) {
+    private void validateDate(String text, String label, boolean allowPresent) {
+        if (allowPresent && "至今".equals(text)) return;
         try {
             if (text.matches("\\d{4}-\\d{2}")) YearMonth.parse(text);
             else if (text.matches("\\d{4}-\\d{2}-\\d{2}")) LocalDate.parse(text);
             else throw new DateTimeParseException("format", text, 0);
-        } catch (DateTimeParseException ex) { throw new BizException(400, label + "需为有效日期 YYYY-MM 或 YYYY-MM-DD"); }
+        } catch (DateTimeParseException ex) {
+            throw new BizException(400, label + "需为有效日期 YYYY-MM 或 YYYY-MM-DD" + (allowPresent ? "，或选择至今" : ""));
+        }
     }
 
     private String serialize(JsonNode node) {
