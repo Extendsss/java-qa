@@ -7,5 +7,8 @@
 | Vue | 3.5.17 | vue.global.prod.js | LICENSE-vue.txt（MIT） |
 | Vue Router | 4.5.1 | vue-router.global.prod.js | LICENSE-vue-router.txt（MIT） |
 | Axios | 1.10.0 | axios.min.js | LICENSE-axios.txt（MIT） |
+| Marked | 4.3.0 | marked.min.js | LICENSE-marked.txt（MIT） |
+| Highlight.js | 11.9.0 | highlight.min.js | LICENSE-highlight.txt（BSD-3-Clause） |
+| DOMPurify | 3.1.6 | purify.min.js | LICENSE-dompurify.txt（Apache-2.0 / MPL-2.0） |
 
 这些文件为各上游包的浏览器发行版本。升级时应同时更新 index.html 的 CDN 版本和本目录的对应文件，并保留许可证。

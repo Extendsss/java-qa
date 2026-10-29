@@ -27,5 +27,5 @@
   Q.clearSession = () => {Q.state.token = ''; Q.state.user = null; localStorage.removeItem('quiz.token');};
   Q.saveSession = user => {Q.state.user = user; Q.state.token = user.token; localStorage.setItem('quiz.token', user.token);};
   Q.views = {};
-  Q.mix = {data: () => ({busy: false, error: ''}), methods: {run(action) {return Q.run(this, action);}, editable: Q.editable, typeName(type) {return Q.types[type] || type;}, difficultyName(level) {return Q.difficulties[level] || '—';}, time: Q.time, percent: Q.percent}};
+  Q.mix = {data: () => ({busy: false, error: ''}), methods: {run(action) {return Q.run(this, action);}, editable: Q.editable, typeName(type) {return Q.types[type] || type;}, difficultyName(level) {return Q.difficulties[level] || '—';}, time: Q.time, percent: Q.percent, md(value) {return Q.md(value);}, mdInline(value) {return Q.mdInline(value);}}};
 })();

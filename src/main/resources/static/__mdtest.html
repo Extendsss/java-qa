@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markdown 渲染走查 · 知序</title>
+<link rel="stylesheet" href="/css/app.css?v=2">
+</head>
+<body>
+<div class="shell">
+  <main class="main" style="max-width:1000px;margin:0 auto;padding:28px 22px">
+    <div id="demo"></div>
+  </main>
+</div>
+
+<script type="text/plain" id="sample-content">## HashMap 的扩容机制
+
+当元素数量超过 **负载因子 × 容量** 时触发扩容，核心流程如下：
+
+```java
+public class HashMapDemo {
+    public static void main(String[] args) {
+        Map<String, Integer> map = new HashMap<>(16);
+        map.put("鸽鸽", 1);
+        System.out.println(map.get("鸽鸽"));
+    }
+}
+```
+
+对应的建表语句：
+
+```mysql
+CREATE TABLE `question` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `title` VARCHAR(200) NOT NULL COMMENT '题目标题',
+  `analysis` TEXT COMMENT '解析'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+MyBatis 映射片段：
+
+```xml
+<mapper namespace="com.quiz.mapper.QuestionMapper">
+    <select id="findById" resultType="Question">
+        SELECT * FROM question WHERE id = #{id}
+    </select>
+</mapper>
+```
+
+接口返回示例：
+
+```json
+{"code": 0, "data": {"id": 1, "title": "HashMap 扩容机制"}}
+```
+
+行内代码 `HashMap.put()` 与 **加粗** 同样支持，列表亦可：
+
+- 扩容阈值 = 容量 × 负载因子
+- 扩容后旧元素 `rehash` 迁移</script>
+
+<script type="text/plain" id="sample-answer">扩容时容量翻倍，旧数组元素重新散列到新数组：
+
+```java
+Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
+transfer(tab, newTab);
+```
+
+> 时间复杂度 O(n)，尽量预设初始容量避免多次扩容。</script>
+
+<script type="text/plain" id="sample-analysis">1. `put` 后检查 `++size > threshold`
+2. 触发 `resize()`，容量左移一位
+3. 元素迁移后重新计算下标</script>
+
+<script src="/vendor/vue.global.prod.js?v=2"></script>
+<script src="/vendor/axios.min.js?v=2"></script>
+<script src="/vendor/marked.min.js?v=2"></script>
+<script src="/vendor/highlight.min.js?v=2"></script>
+<script src="/vendor/purify.min.js?v=2"></script>
+<script src="/js/api.js?v=2"></script>
+<script src="/js/markdown.js?v=2"></script>
+<script src="/js/components.js?v=2"></script>
+<script>
+(function () {
+  'use strict';
+  const text = id => document.getElementById(id).textContent.trim();
+  const app = Vue.createApp({
+    mixins: [Quiz.mix],
+    data: () => ({
+      content: text('sample-content'),
+      answer: text('sample-answer'),
+      analysis: text('sample-analysis'),
+      optionText: '如 `map.put("a", 1)`，平均时间复杂度为 **O(1)**'
+    }),
+    template: `<div><div class="page-heading"><div><div class="eyebrow">MARKDOWN RENDER CHECK</div><h1>Markdown 渲染走查</h1><p>题干、选项、答案、解析的渲染效果，以及录入编辑器的实时预览。</p></div></div>
+    <section class="card"><h2>题目内容</h2><div class="question-content md" v-html="md(content)"></div>
+    <div class="option"><span class="option-letter">A</span><span class="md-inline" v-html="mdInline(optionText)"></span></div>
+    <h3 style="margin-top:22px">参考答案</h3><div class="answer-content md" v-html="md(answer)"></div>
+    <h3 style="margin-top:22px">解析</h3><div class="answer-content md" v-html="md(analysis)"></div></section>
+    <section class="card"><h2>录入编辑器（实时预览）</h2><label class="field">题目内容<md-editor v-model="content" :required="true" :maxlength="30000" label="题目内容" placeholder="试试在这里输入 \`\`\`java 代码块"></md-editor></label></section></div>`
+  });
+  app.component('md-editor', Quiz.components.MdEditor);
+  app.mount('#demo');
+})();
+</script>
+</body>
+</html>
