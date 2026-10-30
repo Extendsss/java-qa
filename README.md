@@ -104,6 +104,10 @@ java -jar target/quiz-system-0.0.1-SNAPSHOT.jar
 
 Render 免费实例可能休眠，首次请求需要等待冷启动；重启会使 token 失效。持久数据全部存于 MySQL，应用无需持久磁盘。
 
+## 宝塔面板（阿里云专享版）部署
+
+在阿里云 ECS + 宝塔 Linux 面板环境部署本项目的完整操作步骤（安全组放行、Nginx / MySQL 8 / JDK 8 安装、Java 项目管理器运行 jar、反向代理与 HTTPS）、上线验收清单、发版升级 SOP 与常见问题排查，见 [宝塔部署手册](docs/baota-deploy.md)。
+
 ## API 约定
 
 统一响应：`{"code":0,"message":"ok","data":...}`。业务错误也可能使用 HTTP 200，请按 `code` 判断；401 表示需重新登录，403 表示无权限。分页接口返回 `{"total":0,"list":[]}`，`page` 从 1 开始，`size` 默认 10、最多 100。
